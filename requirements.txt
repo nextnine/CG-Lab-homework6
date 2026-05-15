@@ -1,0 +1,8 @@
+torch
+torchvision
+matplotlib
+numpy
+pillow
+tqdm
+# Install pytorch3d separately if pip cannot resolve a wheel for your platform.
+pytorch3d
