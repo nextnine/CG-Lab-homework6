@@ -27,28 +27,64 @@ def require_package(module_name: str, install_hint: str) -> None:
         raise SystemExit(f"Missing dependency '{module_name}'. {install_hint}")
 
 
-require_package("torch", "Install PyTorch, e.g. `pip install torch torchvision`.")
-require_package("pytorch3d", "Install PyTorch3D matching your PyTorch/CUDA version.")
-require_package("matplotlib", "Install matplotlib with `pip install matplotlib`.")
-require_package("tqdm", "Install tqdm with `pip install tqdm`.")
+def load_runtime_dependencies() -> None:
+    """Import heavy rendering dependencies after CLI parsing.
 
-import matplotlib.pyplot as plt
-import torch
-import torch.nn.functional as F
-from pytorch3d.io import load_objs_as_meshes, save_obj
-from pytorch3d.loss import mesh_edge_loss, mesh_laplacian_smoothing, mesh_normal_consistency
-from pytorch3d.renderer import (
-    BlendParams,
-    FoVPerspectiveCameras,
-    MeshRasterizer,
-    MeshRenderer,
-    RasterizationSettings,
-    SoftSilhouetteShader,
-    look_at_view_transform,
-)
-from pytorch3d.structures import Meshes
-from pytorch3d.utils import ico_sphere
-from tqdm import tqdm
+    Delaying these imports keeps `python fit_cow_silhouette.py --help` usable in
+    a fresh checkout and avoids making `pip install -r requirements.txt` fail on
+    platforms where PyTorch3D must be installed from a platform-specific wheel or
+    built from source.
+    """
+
+    require_package("torch", "Install PyTorch, e.g. `pip install torch torchvision`.")
+    require_package("pytorch3d", "Install PyTorch3D with a command matching your PyTorch/CUDA version.")
+    require_package("matplotlib", "Install matplotlib with `pip install matplotlib`.")
+    require_package("tqdm", "Install tqdm with `pip install tqdm`.")
+
+    global plt, torch, F
+    global load_objs_as_meshes, save_obj
+    global mesh_edge_loss, mesh_laplacian_smoothing, mesh_normal_consistency
+    global BlendParams, FoVPerspectiveCameras, MeshRasterizer, MeshRenderer
+    global RasterizationSettings, SoftSilhouetteShader, look_at_view_transform
+    global Meshes, ico_sphere, tqdm
+
+    import matplotlib.pyplot as plt_import
+    import torch as torch_import
+    import torch.nn.functional as F_import
+    from pytorch3d.io import load_objs_as_meshes as load_objs_as_meshes_import
+    from pytorch3d.io import save_obj as save_obj_import
+    from pytorch3d.loss import mesh_edge_loss as mesh_edge_loss_import
+    from pytorch3d.loss import mesh_laplacian_smoothing as mesh_laplacian_smoothing_import
+    from pytorch3d.loss import mesh_normal_consistency as mesh_normal_consistency_import
+    from pytorch3d.renderer import BlendParams as BlendParams_import
+    from pytorch3d.renderer import FoVPerspectiveCameras as FoVPerspectiveCameras_import
+    from pytorch3d.renderer import MeshRasterizer as MeshRasterizer_import
+    from pytorch3d.renderer import MeshRenderer as MeshRenderer_import
+    from pytorch3d.renderer import RasterizationSettings as RasterizationSettings_import
+    from pytorch3d.renderer import SoftSilhouetteShader as SoftSilhouetteShader_import
+    from pytorch3d.renderer import look_at_view_transform as look_at_view_transform_import
+    from pytorch3d.structures import Meshes as Meshes_import
+    from pytorch3d.utils import ico_sphere as ico_sphere_import
+    from tqdm import tqdm as tqdm_import
+
+    plt = plt_import
+    torch = torch_import
+    F = F_import
+    load_objs_as_meshes = load_objs_as_meshes_import
+    save_obj = save_obj_import
+    mesh_edge_loss = mesh_edge_loss_import
+    mesh_laplacian_smoothing = mesh_laplacian_smoothing_import
+    mesh_normal_consistency = mesh_normal_consistency_import
+    BlendParams = BlendParams_import
+    FoVPerspectiveCameras = FoVPerspectiveCameras_import
+    MeshRasterizer = MeshRasterizer_import
+    MeshRenderer = MeshRenderer_import
+    RasterizationSettings = RasterizationSettings_import
+    SoftSilhouetteShader = SoftSilhouetteShader_import
+    look_at_view_transform = look_at_view_transform_import
+    Meshes = Meshes_import
+    ico_sphere = ico_sphere_import
+    tqdm = tqdm_import
 
 COW_BASE_URL = "https://raw.githubusercontent.com/facebookresearch/pytorch3d/main/docs/tutorials/data/cow_mesh"
 COW_FILES = ("cow.obj", "cow.mtl", "cow_texture.png")
@@ -59,7 +95,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-obj", type=Path, default=None, help="Path to target cow OBJ.")
     parser.add_argument("--data-dir", type=Path, default=Path("data/cow_mesh"), help="Directory for downloaded cow data.")
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"), help="Directory for rendered outputs.")
-    parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu", help="Torch device.")
+    parser.add_argument(
+        "--device",
+        default="auto",
+        help="Torch device. Use 'auto' to select cuda:0 when available, otherwise cpu.",
+    )
     parser.add_argument("--iters", type=int, default=1000, help="Optimization iterations.")
     parser.add_argument("--num-views", type=int, default=20, help="Number of training camera views.")
     parser.add_argument("--image-size", type=int, default=256, help="Square render size in pixels.")
@@ -198,7 +238,11 @@ def save_mesh(mesh: Meshes, path: Path) -> None:
 
 def main() -> None:
     args = parse_args()
-    device = torch.device(args.device)
+    load_runtime_dependencies()
+    selected_device = "cuda:0" if args.device == "auto" and torch.cuda.is_available() else args.device
+    if selected_device == "auto":
+        selected_device = "cpu"
+    device = torch.device(selected_device)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     target_obj = args.target_obj if args.target_obj is not None else download_default_cow(args.data_dir)

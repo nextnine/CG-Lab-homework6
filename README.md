@@ -10,16 +10,22 @@
 
 ## 环境配置
 
-推荐使用 Conda 创建独立环境，并根据本机 CUDA / PyTorch 版本安装 PyTorch3D：
+推荐使用 Conda 创建独立环境。`requirements.txt` 只包含可直接通过 PyPI 安装的通用依赖；PyTorch3D 的 wheel 与 Python、PyTorch、CUDA 版本强相关，不能简单写成 `pytorch3d` 放进 `requirements.txt`，否则很多平台会出现 “No matching distribution found for pytorch3d”。
 
 ```bash
 conda create -n cg-lab6 python=3.10 -y
 conda activate cg-lab6
 pip install -r requirements.txt
-# PyTorch3D 请参考官方安装命令，选择匹配的 CUDA/PyTorch 版本
 ```
 
-> `requirements.txt` 给出了 Python 侧依赖；PyTorch3D 的 wheel 与 CUDA、PyTorch 版本强相关，因此在部分平台上需要单独安装或源码编译。
+随后请按你的平台单独安装 PyTorch3D。Conda 用户通常可使用类似命令，并需要把 `pytorch`、`pytorch-cuda`、`pytorch3d` 与 CUDA 版本替换成彼此兼容的组合：
+
+```bash
+conda install -c pytorch -c nvidia pytorch torchvision pytorch-cuda=11.8
+conda install -c pytorch3d pytorch3d
+```
+
+如果使用 pip 或 Apple Silicon / Windows / 源码编译，请以 PyTorch3D 官方安装说明为准。脚本会在真正运行实验时检查 `torch` 与 `pytorch3d` 是否可导入；`--help` 不需要提前安装这些重依赖。
 
 ## 数据准备
 
@@ -50,7 +56,7 @@ python fit_cow_silhouette.py \
   --num-views 20 \
   --sphere-level 4 \
   --lr 0.01 \
-  --device cuda:0
+  --device auto
 ```
 
 输出文件默认写入 `outputs/`：
